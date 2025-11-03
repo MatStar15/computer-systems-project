@@ -74,9 +74,25 @@ static void usb_sending_task(void *arg){
     for(;;){
         tight_loop_contents(); // Modify with application code here.
 
-        printf("usb_sending_task\n");
+        // Do stuff only if a message is ready to send
+        if(programState == READY_TO_SEND){
+            // Indicate sending state with LED blinks
+            programState = SENDING;
+            blink_led(3);
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+            // Add null terminator and send the message
+            messageBuffer[messageCounter] = '\0';
+            printf("%s\n", messageBuffer);
+
+            // Reset for the next message
+            messageCounter = 0;
+            memset(messageBuffer, 0, MESSAGE_BUFFER_LENGTH);
+
+            // Set state back to READING
+            programState = READING;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
 
@@ -104,24 +120,56 @@ static void audio_receiving_task(void *arg){
     }
 }
 
-static void button1Interrupt(uint gpio, uint32_t eventMask) {
-    if(orientationState == HORIZONTAL){
-        messageBuffer[messageCounter] = '-';
-        messageCounter++;
-    }else{
-        messageBuffer[messageCounter] = '.';
-        messageCounter++;
-    }
-    
-    // for(int i = 0; i < messageCounter; i++){
-    printf("%c ", messageBuffer[messageCounter - 1]);
-    // }
+static void button_task(void *arg){
+    (void)arg;
+    static uint8_t spaceCounter = 0;
 
-    // printf("\n");
+    for(;;){
+        tight_loop_contents(); // Modify with application code here.
+
+        // Guard clause, if not in READING state, skip the rest of the loop
+        if(programState != READING){
+            vTaskDelay(pdMS_TO_TICKS(400));
+            continue;
+        }
+
+        if(button1Pressed){
+            if(orientationState == HORIZONTAL){
+                messageBuffer[messageCounter] = '-';
+                messageCounter++;
+            } else {
+                messageBuffer[messageCounter] = '.';
+                messageCounter++;
+            }
+            spaceCounter = 0;
+
+            button1Pressed = false;
+        }
+
+        if(button2Pressed){
+            messageBuffer[messageCounter] = ' ';
+            messageCounter++;
+            spaceCounter++;
+
+            // 3 consecutive spaces indicate the end of the message, set state to READY_TO_SEND
+            if(spaceCounter >= 3){
+                programState = READY_TO_SEND;
+                spaceCounter = 0;
+            }
+
+            button2Pressed = false;
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(400));
+    }
+}
+
+static void button1Interrupt(uint gpio, uint32_t eventMask) {
+    button1Pressed = true;
 }
 
 static void button2Interrupt(uint gpio, uint32_t eventMask) {
-    // Button 2 interruption
+    button2Pressed = true;
 }
 
 int main() {
@@ -139,21 +187,37 @@ int main() {
     init_button1();
     init_button2();
 
+    init_led();
+
     init_ICM42670();
 
-    TaskHandle_t myExampleTask = NULL;
+    TaskHandle_t dataTaskHandle = NULL;
     // Create the tasks with xTaskCreate
-    BaseType_t result = xTaskCreate(data_task,       // (en) Task function
+    BaseType_t dataTaskResult = xTaskCreate(data_task,       // (en) Task function
                 "data_test",              // (en) Name of the task 
                 DEFAULT_STACK_SIZE, // (en) Size of the stack for this task (in words). Generally 1024 or 2048
                 NULL,               // (en) Arguments of the task 
                 2,                  // (en) Priority of this task
-                &myExampleTask);    // (en) A handle to control the execution of this task
+                &dataTaskHandle);    // (en) A handle to control the execution of this task
 
-    if(result != pdPASS) {
-        printf("Task creation failed\n");
+    if(dataTaskResult != pdPASS) {
+        printf("Data task creation failed\n");
         return 0;
     }
+
+    TaskHandle_t buttonTaskHandle = NULL;
+    BaseType_t buttonTaskResult = xTaskCreate(button_task, 
+        "button_task", 
+        DEFAULT_STACK_SIZE, 
+        NULL, 
+        2, 
+        &buttonTaskHandle);
+
+    if(buttonTaskResult != pdPASS) {
+        printf("Button task creation failed\n");
+        return 0;
+    }
+
 
     gpio_set_irq_enabled_with_callback(BUTTON1, GPIO_IRQ_EDGE_RISE, true, button1Interrupt);
     // gpio_set_irq_enabled_with_callback(BUTTON2, GPIO_IRQ_EDGE_RISE, true, button2Interrupt);
