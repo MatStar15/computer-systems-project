@@ -76,13 +76,14 @@ static void usb_sending_task(void *arg){
 
         // Do stuff only if a message is ready to send
         if(programState == READY_TO_SEND){
-            // Indicate sending state with LED blinks
             programState = SENDING;
-            blink_led(3);
 
             // Add null terminator and send the message
             messageBuffer[messageCounter] = '\0';
             printf("%s\n", messageBuffer);
+
+            // Indicate message sent by blinking LED 3 times
+            blink_led(3);
 
             // Reset for the next message
             messageCounter = 0;
