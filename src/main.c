@@ -14,6 +14,7 @@
 #define DEFAULT_STACK_SIZE 2048 
 
 #define MESSAGE_BUFFER_LENGTH 255
+#define RX_COMMAND_BUFFER_LENGTH 64
 
 //Add here necessary states
 enum state { SENDING=1, READY_TO_SEND, READING };
@@ -96,12 +97,48 @@ static void usb_sending_task(void *arg){
 static void usb_receiving_task(void *arg){
     (void)arg;
 
+    // Buffer to store incoming commands
+    char rxBuffer[RX_COMMAND_BUFFER_LENGTH];
+    uint16_t rxCounter = 0;
+
     for(;;){
-        tight_loop_contents(); // Modify with application code here.
+        int c = getchar();
 
-        printf("usb_receiving_task\n");
+        if (c != EOF) {
+            
+            if (c == '\n' || c == '\r') {
+                rxBuffer[rxCounter] = '\0';
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+                if (rxCounter > 0) {
+                    
+                    // Plan: "check /a" -> "to LED"
+                    if (strcmp(rxBuffer, "/a") == 0) {
+                        // Toggle the LED
+                        
+                    }
+                    else if (strcmp(rxBuffer, "/b") == 0) {
+                        // Play a 500Hz note for 200ms
+                        // play_buzzer_note(500, 200);
+                        printf("Received: /b. Playing buzzer.\n");
+                    } 
+                }
+
+                rxCounter = 0;
+                memset(rxBuffer, 0, RX_COMMAND_BUFFER_LENGTH);
+
+            } 
+            // If it's a regular character, add it to the buffer
+            else {
+                if (rxCounter < (RX_COMMAND_BUFFER_LENGTH - 1)) {
+                    rxBuffer[rxCounter] = (char)c;
+                    rxCounter++;
+                } else {
+                    // Buffer overflow, reset
+                    rxCounter = 0;
+                    memset(rxBuffer, 0, RX_COMMAND_BUFFER_LENGTH);
+                }
+            }
+        }
     }
 }
 
@@ -240,6 +277,18 @@ int main() {
 
     if(usbSendingTaskResult != pdPASS) {
         printf("USB sending task creation failed\n");
+        return 0;
+    }
+
+    TaskHandle_t usbReceivingTaskHandle = NULL;
+    BaseType_t usbReceivingTaskResult = xTaskCreate(usb_receiving_task,
+        "usb_receiving_task",
+        DEFAULT_STACK_SIZE,
+        NULL,
+        2,
+        &usbReceivingTaskHandle);
+    if(usbReceivingTaskResult != pdPASS) {
+        printf("USB receiving task creation failed\n");
         return 0;
     }
 
