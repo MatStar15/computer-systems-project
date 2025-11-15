@@ -75,6 +75,11 @@ static void usb_sending_task(void *arg){
             // Indicate message sent by blinking LED 3 times
             blink_led(3);
 
+            // Write message to lcd screen
+            clear_display();
+            write_text(messageBuffer);
+
+
             // Reset for the next message
             messageCounter = 0;
             memset(messageBuffer, 0, MESSAGE_BUFFER_LENGTH);
@@ -86,6 +91,7 @@ static void usb_sending_task(void *arg){
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
+
 
 static void usb_receiving_task(void *arg){
     (void)arg;
@@ -128,9 +134,11 @@ static void button_task(void *arg){
             if(orientationState == HORIZONTAL){
                 messageBuffer[messageCounter] = '-';
                 messageCounter++;
+                buzzer_play_tone(440, 300);
             } else {
                 messageBuffer[messageCounter] = '.';
                 messageCounter++;
+                buzzer_play_tone(440, 100);
             }
             spaceCounter = 0;
 
@@ -186,6 +194,12 @@ int main() {
     init_button2();
 
     init_led();
+
+    init_i2c_default();
+    init_display();
+    clear_display();
+
+    init_buzzer();
 
     init_ICM42670();
 
