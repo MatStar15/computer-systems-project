@@ -76,9 +76,7 @@ static void usb_sending_task(void *arg){
             // Indicate message sent by blinking LED 3 times
             blink_led(3);
 
-            // Write message to lcd screen
-            clear_display();
-            write_text(messageBuffer);
+
 
 
             // Reset for the next message
@@ -121,6 +119,14 @@ static void usb_receiving_task(void *arg){
                         // play_buzzer_note(500, 200);
                         printf("Received: /b. Playing buzzer.\n");
                     } 
+                    else{
+                        // Write message to lcd screen
+                        clear_display();
+                        write_text(rxBuffer);
+                        // Play message on buzzer
+                        play_buzzer(rxBuffer);
+                    
+                    }
                 }
 
                 rxCounter = 0;
@@ -214,6 +220,46 @@ static void gpio_callback(uint gpio, uint32_t events) {
     }
 }
 
+//   translate morse to alphabet
+void translate_morse2alpha(char *message){
+    const char *letter = "**ETIANMSURWDKGOHVF?L?PJBXCYZQ??";
+    char message[MESSAGE_BUFFER_LENGTH];
+
+    uint8_t counter = 0;
+    uint8_t index = 1;
+    size_t message_length = strlen(messageBuffer);
+    for (size_t i = 0; i < message_length; i++){
+	    if (messageBuffer[i] = '-'){
+		    index = (index * 2) + 1;
+	    }
+	    else if (messageBuffer[i] = '.'){
+		    index = index * 2;
+	    }
+	    else{
+		    message[counter] = letter[index];
+		    counter++;
+		    index = 1;
+	    }
+    return message;
+    }
+}
+
+void play_buzzer(char *message){
+    size_t message_length = strlen(message);
+
+    for (size_t i = 0; i < message_length; i++){
+        if (message == "-"){
+            buzzer_play_tone(440, 300);
+        }
+        else if (message == "."){
+            buzzer_play_tone(440, 100);
+        }
+        else{
+            vTaskDelay(pdMS_TO_TICKS(500));                    
+        }
+        vTaskDelay(pdMS_TO_TICKS(200));
+       	}
+}
 
 int main() {
     stdio_init_all();
