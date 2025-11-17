@@ -126,9 +126,8 @@ static void usb_receiving_task(void *arg){
                         // Write message to lcd screen
                         clear_display();
                         write_text(rxBuffer);
-                        // Play message on buzzer
+
                         play_buzzer(rxBuffer);
-                    
                     }
                 }
 
@@ -244,21 +243,20 @@ static void translate_morse2alpha(char *morseMessage, char *alphaMessage, uint8_
     }
 }
 
-static void play_buzzer(char *message){
-    size_t message_length = strlen(message);
+static void play_buzzer(char *string){
+    
+    char *ptr;
 
-    for (size_t i = 0; i < message_length; i++){
-        if (message == "-"){
+    for (ptr = string; *ptr != 0; ptr++) {
+        if (*ptr == '-') {
             buzzer_play_tone(440, 300);
-        }
-        else if (message == "."){
+        } else if (*ptr == '.') {
             buzzer_play_tone(440, 100);
-        }
-        else{
+        } else {
             vTaskDelay(pdMS_TO_TICKS(500));                    
         }
         vTaskDelay(pdMS_TO_TICKS(200));
-       	}
+    }
 }
 
 int main() {
