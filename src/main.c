@@ -29,6 +29,9 @@ bool button2Pressed = false;
 uint16_t messageCounter = 0;
 char messageBuffer[MESSAGE_BUFFER_LENGTH];
 
+static void play_buzzer(char *message);
+static void translate_morse2alpha(char *morseMessage, char *alphaMessage, uint8_t messageLength);
+
 
 static void data_task(void *arg){
     (void)arg;
@@ -221,30 +224,27 @@ static void gpio_callback(uint gpio, uint32_t events) {
 }
 
 //   translate morse to alphabet
-void translate_morse2alpha(char *message){
-    const char *letter = "**ETIANMSURWDKGOHVF?L?PJBXCYZQ??";
-    char message[MESSAGE_BUFFER_LENGTH];
+static void translate_morse2alpha(char *morseMessage, char *alphaMessage, uint8_t messageLength){
+    static char *letter = "**ETIANMSURWDKGOHVF?L?PJBXCYZQ??";
 
     uint8_t counter = 0;
     uint8_t index = 1;
-    size_t message_length = strlen(messageBuffer);
-    for (size_t i = 0; i < message_length; i++){
-	    if (messageBuffer[i] = '-'){
+    for (size_t i = 0; i < messageLength; i++){
+	    if (morseMessage[i] = '-'){
 		    index = (index * 2) + 1;
 	    }
-	    else if (messageBuffer[i] = '.'){
+	    else if (morseMessage[i] = '.'){
 		    index = index * 2;
 	    }
 	    else{
-		    message[counter] = letter[index];
+		    alphaMessage[counter] = letter[index];
 		    counter++;
 		    index = 1;
 	    }
-    return message;
     }
 }
 
-void play_buzzer(char *message){
+static void play_buzzer(char *message){
     size_t message_length = strlen(message);
 
     for (size_t i = 0; i < message_length; i++){
