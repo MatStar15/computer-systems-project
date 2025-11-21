@@ -17,7 +17,7 @@
 #define RX_COMMAND_BUFFER_LENGTH 64
 
 //Add here necessary states
-enum state { SENDING=1, READY_TO_SEND, READING };
+enum state { SENDING=1, READY_TO_SEND, READING, PROCESSING_MESSAGE };
 enum state programState = READING;
 
 enum orientation { VERTICAL=1, HORIZONTAL};
@@ -44,6 +44,12 @@ static void data_task(void *arg){
     float ax, ay, az, gx, gy, gz, t;
 
     for(;;){
+
+        if (programState != READING){
+            vTaskDelay(pdMS_TO_TICKS(200));
+            continue;
+        }
+
         tight_loop_contents(); // Modify with application code here.
 
         ICM42670_read_sensor_data(&ax, &ay, &az, &gx, &gy, &gz, &t);
@@ -111,6 +117,8 @@ static void usb_receiving_task(void *arg){
                 rxBuffer[rxCounter] = '\0';
 
                 if (rxCounter > 0) {
+
+                    programState = PROCESSING_MESSAGE;
                     
                     // Plan: "check /a" -> "to LED"
                     if (strcmp(rxBuffer, "/a") == 0) {
@@ -133,6 +141,8 @@ static void usb_receiving_task(void *arg){
 
                         play_buzzer(rxBuffer);
                     }
+
+                    programState = READING;
                 }
 
                 rxCounter = 0;
@@ -228,7 +238,7 @@ static void gpio_callback(uint gpio, uint32_t events) {
 
 //   translate morse to alphabet
 static void translate_morse2alpha(char *morseMessage, char *alphaMessage, uint8_t messageLength){
-    static char *letter = "**ETIANMSURWDKGOHVF?L?PJBXCYZQ??";
+    static char *letter = "  ETIANMSURWDKGOHVF?L?PJBXCYZQ??";
 
     // printf("Translating morse message: %s\n", morseMessage);
     // printf("Message length: %d\n", messageLength);
