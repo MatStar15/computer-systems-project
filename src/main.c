@@ -125,7 +125,11 @@ static void usb_receiving_task(void *arg){
                     else{
                         // Write message to lcd screen
                         clear_display();
-                        write_text(rxBuffer);
+
+                        char alphaMessage[MESSAGE_BUFFER_LENGTH];
+                        translate_morse2alpha(rxBuffer, alphaMessage, rxCounter);
+                        // printf("Translated message: %s\n", alphaMessage);
+                        write_text(alphaMessage);
 
                         play_buzzer(rxBuffer);
                     }
@@ -226,13 +230,16 @@ static void gpio_callback(uint gpio, uint32_t events) {
 static void translate_morse2alpha(char *morseMessage, char *alphaMessage, uint8_t messageLength){
     static char *letter = "**ETIANMSURWDKGOHVF?L?PJBXCYZQ??";
 
+    // printf("Translating morse message: %s\n", morseMessage);
+    // printf("Message length: %d\n", messageLength);
+
     uint8_t counter = 0;
     uint8_t index = 1;
     for (size_t i = 0; i < messageLength; i++){
-	    if (morseMessage[i] = '-'){
+	    if (morseMessage[i] == '-'){
 		    index = (index * 2) + 1;
 	    }
-	    else if (morseMessage[i] = '.'){
+	    else if (morseMessage[i] == '.'){
 		    index = index * 2;
 	    }
 	    else{
@@ -241,6 +248,10 @@ static void translate_morse2alpha(char *morseMessage, char *alphaMessage, uint8_
 		    index = 1;
 	    }
     }
+
+
+    alphaMessage[counter] = letter[index];
+    alphaMessage[counter + 1] = '\0';
 }
 
 static void play_buzzer(char *string){
