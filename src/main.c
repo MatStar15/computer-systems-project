@@ -80,7 +80,11 @@ static void usb_sending_task(void *arg){
 
             // Add null terminator and send the message
             messageBuffer[messageCounter] = '\0';
-            printf("%s\n", messageBuffer);
+            printf("Morse message: %s\n", messageBuffer);
+
+            char alphaMessage[MESSAGE_BUFFER_LENGTH];
+            translate_morse2alpha(messageBuffer, alphaMessage, messageCounter);
+            printf("Translated message: %s\n", alphaMessage);
 
             // Indicate message sent by blinking LED 3 times
             blink_led(3);
