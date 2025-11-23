@@ -124,16 +124,16 @@ static void usb_receiving_task(void *arg){
 
                     programState = PROCESSING_MESSAGE;
                     
-                    // Plan: "check /a" -> "to LED"
-                    if (strcmp(rxBuffer, "/a") == 0) {
-                        // Toggle the LED
-                        
+                    // Plan: "check /led" -> "to LED"
+                    if (strcmp(rxBuffer, "/led") == 0) {
+                        blink_led(5);
                     }
-                    else if (strcmp(rxBuffer, "/b") == 0) {
-                        // Play a 500Hz note for 200ms
-                        // play_buzzer_note(500, 200);
-                        printf("Received: /b. Playing buzzer.\n");
+                    else if (strcmp(rxBuffer, "/buzzer") == 0) {
+                        buzzer_play_tone(500, 200);
                     } 
+                    else if (strcmp((rxBuffer), "/clear") == 0) {
+                        clear_display();    
+                    }
                     else{
                         // Write message to lcd screen
                         clear_display();
