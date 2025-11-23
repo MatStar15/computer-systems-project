@@ -17,10 +17,10 @@
 #define RX_COMMAND_BUFFER_LENGTH 64
 
 //Add here necessary states
-enum state { SENDING=1, READY_TO_SEND, READING, PROCESSING_MESSAGE };
+enum state { SENDING=1, READY_TO_SEND, READING, PROCESSING_MESSAGE, IN_MENU, PLAYING_SONG };
 enum state programState = READING;
 
-enum orientation { VERTICAL=1, HORIZONTAL};
+enum orientation { HORIZONTAL=1, VERTICAL};
 enum orientation orientationState = HORIZONTAL; 
 
 bool button1Pressed = false;
@@ -29,8 +29,40 @@ bool button2Pressed = false;
 uint16_t messageCounter = 0;
 char messageBuffer[MESSAGE_BUFFER_LENGTH];
 
+char menuOptions[5][10] = {"SELECT", "SONG 1", "SONG 2", "SONG 3", "EXIT"};
+uint8_t currentMenuOption = 0;
+
+int16_t song1[] = {
+    330, 294, 262, 294, 330, 330, 330, 0,    /* E D C D E E E - pause */
+    294, 294, 294, 330, 392, 392, 0,         /* D D D E G G - pause */
+    330, 294, 262, 294, 330, 330, 330, 0,    /* E D C D E E E - pause */
+    330, 294, 294, 330, 294, 262, -1         /* E D D E D C */
+};
+//happy birthday melody
+int16_t song2[] = {
+    392, 392, 440, 392, 523, 494, 0,         /* Hap-py birth-day to you - pause */
+    392, 392, 440, 392, 587, 523, 0,         /* Hap-py birth-day to you - pause */
+    392, 392, 784, 659, 523, 494, 440, 0,    /* Hap-py birth-day dear ... - pause */
+    698, 698, 659, 523, 587, 523 , -1        /* ... name - pause */
+};
+//twinkle twinkle little star melody
+int16_t song3[] = {
+    330, 330, 330, 0,                        /* Jin-gle bells - pause */
+    330, 330, 330, 0,                        /* Jin-gle bells - pause */
+    330, 392, 262, 294, 330, 0,              /* Jin-gle all the way - pause */
+    349, 349, 349, 349, 349, 330, 330, 0,    /* Oh what fun it is to - pause */
+    330, 330, 392, 392, 349, 294, 262, -1    /* ride in a one-horse sleigh */
+};
+
+int16_t *songs[] = {
+    song1,
+    song2,
+    song3
+};
+
 static void play_buzzer(char *message);
 static void translate_morse2alpha(char *morseMessage, char *alphaMessage, uint8_t messageLength);
+static void play_song(uint8_t songIndex);
 
 
 static void data_task(void *arg){
@@ -42,6 +74,7 @@ static void data_task(void *arg){
 
 
     float ax, ay, az, gx, gy, gz, t;
+    bool first_run = true;
 
     for(;;){
 
@@ -50,16 +83,22 @@ static void data_task(void *arg){
             continue;
         }
 
+
         tight_loop_contents(); // Modify with application code here.
 
         ICM42670_read_sensor_data(&ax, &ay, &az, &gx, &gy, &gz, &t);
 
         if(gx > 100){
-            orientationState = VERTICAL;
+            orientationState = HORIZONTAL;
         }
 
         if(gx < -100){
+            orientationState = VERTICAL;
+        }
+
+        if (first_run){
             orientationState = HORIZONTAL;
+            first_run = false;
         }
 
         // printf("gx: %f, orientation: %d\n", gx, orientationState);
@@ -120,19 +159,26 @@ static void usb_receiving_task(void *arg){
             if (c == '\n' || c == '\r') {
                 rxBuffer[rxCounter] = '\0';
 
-                if (rxCounter > 0) {
+                if (rxCounter > 0 && programState == READING) {
 
                     programState = PROCESSING_MESSAGE;
                     
                     // Plan: "check /led" -> "to LED"
                     if (strcmp(rxBuffer, "/led") == 0) {
                         blink_led(5);
+                        programState = READING;
                     }
                     else if (strcmp(rxBuffer, "/buzzer") == 0) {
                         buzzer_play_tone(500, 200);
+                        programState = READING;
                     } 
                     else if (strcmp((rxBuffer), "/clear") == 0) {
                         clear_display();    
+                        programState = READING;
+                    }
+                    else if (strcmp((rxBuffer), "/play") == 0) {
+                        currentMenuOption = 0;
+                        programState = IN_MENU;
                     }
                     else{
                         // Write message to lcd screen
@@ -144,9 +190,9 @@ static void usb_receiving_task(void *arg){
                         write_text(alphaMessage);
 
                         play_buzzer(rxBuffer);
-                    }
 
-                    programState = READING;
+                        programState = READING;
+                    }
                 }
 
                 rxCounter = 0;
@@ -168,15 +214,25 @@ static void usb_receiving_task(void *arg){
     }
 }
 
-static void audio_receiving_task(void *arg){
+static void menu_task(void *arg){
     (void)arg;
+    uint8_t selectedMenuOption = -1;
 
     for(;;){
         tight_loop_contents(); // Modify with application code here.
 
-        printf("audio_receiving_task\n");
+        if(programState != IN_MENU){
+            vTaskDelay(pdMS_TO_TICKS(400));
+            continue;
+        }
 
-        vTaskDelay(pdMS_TO_TICKS(2000));
+        if(currentMenuOption != selectedMenuOption){
+            selectedMenuOption = currentMenuOption;
+            clear_display();
+            write_text(menuOptions[currentMenuOption]);
+        }
+
+        vTaskDelay(pdMS_TO_TICKS(400));
     }
 }
 
@@ -187,42 +243,68 @@ static void button_task(void *arg){
     for(;;){
         tight_loop_contents(); // Modify with application code here.
 
-        // Guard clause, if not in READING state, skip the rest of the loop
-        if(programState != READING){
-            vTaskDelay(pdMS_TO_TICKS(400));
-            continue;
-        }
+        if (programState == READING){
 
-        if(button1Pressed){
-            if(orientationState == HORIZONTAL){
-                messageBuffer[messageCounter] = '-';
-                messageCounter++;
-                buzzer_play_tone(440, 300);
-            } else {
-                messageBuffer[messageCounter] = '.';
-                messageCounter++;
-                buzzer_play_tone(440, 100);
-            }
-            spaceCounter = 0;
-
-            button1Pressed = false;
-            // printf("%c`", messageBuffer[messageCounter-1]);
-        }
-
-        if(button2Pressed){
-            messageBuffer[messageCounter] = ' ';
-            messageCounter++;
-            spaceCounter++;
-
-            // 3 consecutive spaces indicate the end of the message, set state to READY_TO_SEND
-            if(spaceCounter >= 3){
-                programState = READY_TO_SEND;
+            if(button1Pressed){
+                if(orientationState == HORIZONTAL){
+                    messageBuffer[messageCounter] = '-';
+                    messageCounter++;
+                    buzzer_play_tone(440, 300);
+                } else {
+                    messageBuffer[messageCounter] = '.';
+                    messageCounter++;
+                    buzzer_play_tone(440, 100);
+                }
                 spaceCounter = 0;
+
+                button1Pressed = false;
+                // printf("%c`", messageBuffer[messageCounter-1]);
             }
 
-            button2Pressed = false;
-            // printf("%c`", messageBuffer[messageCounter-1]);
+            if(button2Pressed){
+                messageBuffer[messageCounter] = ' ';
+                messageCounter++;
+                spaceCounter++;
+
+                // 3 consecutive spaces indicate the end of the message, set state to READY_TO_SEND
+                if(spaceCounter >= 3){
+                    programState = READY_TO_SEND;
+                    spaceCounter = 0;
+                }
+
+                button2Pressed = false;
+                // printf("%c`", messageBuffer[messageCounter-1]);
+            }
+        } else if (programState == IN_MENU){
+
+            if(button1Pressed){
+                // Move to next menu option
+                currentMenuOption = (currentMenuOption + 1) % (sizeof(menuOptions) / sizeof(menuOptions[0]));
+                // printf("Current menu option: %s\n", menuOptions[currentMenuOption]);
+                button1Pressed = false;
+            }
+
+            if(button2Pressed){
+                // Select current menu option
+                if (strcmp(menuOptions[currentMenuOption], "EXIT") == 0){
+                    clear_display();
+                    programState = READING;
+                } else if (strcmp(menuOptions[currentMenuOption], "SELECT") != 0){
+                    // printf("Playing %s\n", menuOptions[currentMenuOption]);
+                    clear_display();
+                    write_text("PLAYING");
+                    // Play song based on selection
+                    // (Implementation of song playing not shown here)
+                    play_song(currentMenuOption);
+                    clear_display();
+                    write_text(menuOptions[currentMenuOption]);
+                }
+                button2Pressed = false;
+            }
         }
+
+        button1Pressed = false;
+        button2Pressed = false;
         
         vTaskDelay(pdMS_TO_TICKS(400));
     }
@@ -282,6 +364,31 @@ static void play_buzzer(char *string){
         }
         vTaskDelay(pdMS_TO_TICKS(200));
     }
+}
+
+static void play_song(uint8_t songIndex){
+    programState = PLAYING_SONG;
+
+    if (songIndex < 1 || songIndex > sizeof(songs) / sizeof(songs[0])){
+        programState = IN_MENU;
+        return;
+    }
+
+    // printf("Playing song %d\n", songIndex) - 1;
+
+    for (size_t i = 0; songs[songIndex - 1][i + 1] >= 0; i++){
+        int16_t frequency = songs[songIndex - 1][i];
+        // printf("Playing frequency: %d\n", frequency);
+        if (frequency == 0){
+            vTaskDelay(pdMS_TO_TICKS(200));
+        } else {
+            buzzer_play_tone(frequency, 250);
+        }
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+
+    // printf("Finished playing song %d\n", songIndex) - 1;
+    programState = IN_MENU;
 }
 
 int main() {
@@ -358,6 +465,18 @@ int main() {
         &usbReceivingTaskHandle);
     if(usbReceivingTaskResult != pdPASS) {
         printf("USB receiving task creation failed\n");
+        return 0;
+    }
+
+    TaskHandle_t menuTaskHandle = NULL;
+    BaseType_t menuTaskResult = xTaskCreate(menu_task,
+        "menu_task",
+        DEFAULT_STACK_SIZE,
+        NULL,
+        2,
+        &menuTaskHandle);
+    if(menuTaskResult != pdPASS) {
+        printf("Menu task creation failed\n");
         return 0;
     }
 
