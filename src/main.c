@@ -10,6 +10,13 @@
 
 #include "tkjhat/sdk.h"
 
+/*
+Project created by:
+Mikołaj Nawrot
+Siemke Van Reyn
+Matviy Starodubtsev
+*/
+
 // Default stack size for the tasks. It can be reduced to 1024 if task is not using lot of memory.
 #define DEFAULT_STACK_SIZE 2048 
 
